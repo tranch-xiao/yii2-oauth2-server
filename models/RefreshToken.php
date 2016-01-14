@@ -95,4 +95,29 @@ class RefreshToken extends \yii\db\ActiveRecord
     {
         return $this->hasOne(User::className(), ['user_id' => 'user_id']);
     }
+
+    /**
+     * @param Client $client
+     * @return bool
+     * @throws \Exception
+     */
+    public static function findByClient($client)
+    {
+        $refreshToken = static::find()
+            ->where(['client_id' => $client->client_id])
+            ->andWhere(['scope' => $client->scope])
+            ->andWhere(['user_id' => \Yii::$app->user->id])
+            ->orderBy(['expires' => SORT_DESC])
+            ->one();
+
+        if ($refreshToken != null) {
+            if ($refreshToken->expires < time()) {
+                $refreshToken->delete();
+                return false;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
 }

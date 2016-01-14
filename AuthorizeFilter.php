@@ -7,23 +7,27 @@
 
 namespace conquer\oauth2;
 
+use conquer\oauth2\models\RefreshToken;
 use yii\web\Session;
 
 /**
  * 
  * @author Andrey Borodulin
- * 
+ *
+ * @property bool $isAuthorized
  */
 class AuthorizeFilter extends \yii\base\ActionFilter
 {
 
     private $_responseType;
 
+    protected $_isAuthorized = false;
+
     public $responseTypes = [
             'token' => 'conquer\oauth2\responsetypes\Implicit',
             'code' => 'conquer\oauth2\responsetypes\Authorization',
     ];
-    
+
     /**
      * 
      * @var boolean
@@ -66,19 +70,6 @@ class AuthorizeFilter extends \yii\base\ActionFilter
     }
 
     /**
-     * If user is logged on, do oauth login immediatly,
-     * continue authorization in the another case
-     */
-    public function afterAction($action, $result)
-    {
-        if (\Yii::$app->user->isGuest) {
-            return $result;
-        } else {
-            $this->finishAuthorization();
-        }
-    }
-    
-    /**
      * @throws Exception
      * @return \conquer\oauth2\BaseModel
      */
@@ -97,12 +88,12 @@ class AuthorizeFilter extends \yii\base\ActionFilter
     /**
      * Finish oauth authorization.
      * Builds redirect uri and performs redirect.
-     * If user is not logged on, redirect contains the Access Denied Error
+     * If user is not logged on or user denied to access, redirect contains the Access Denied Error
      */
     public function finishAuthorization()
     {
         $responseType = $this->getResponseType();
-        if (\Yii::$app->user->isGuest) {
+        if (\Yii::$app->user->isGuest || !$this->isAuthorized) {
             $responseType->errorRedirect('The User denied access to your application', Exception::ACCESS_DENIED);
         }
         $parts = $responseType->getResponseData();
@@ -121,6 +112,28 @@ class AuthorizeFilter extends \yii\base\ActionFilter
     public function getIsOauthRequest()
     {
         return !empty($this->storeKey) && \Yii::$app->session->has($this->storeKey);
+    }
+
+    /**
+     * Check client is authorized.
+     * @return bool
+     * @throws Exception
+     */
+    public function getIsAuthorized() {
+        if (!$this->_isAuthorized) {
+            $client = $this->getResponseType()->getClient();
+            $refreshToken = RefreshToken::findByClient($client);
+            return $refreshToken != null;
+        }
+        return true;
+    }
+
+    /**
+     * Set authorization state
+     * @param bool $state
+     */
+    public function setIsAuthorized($state) {
+        $this->_isAuthorized = $state;
     }
 }
 
